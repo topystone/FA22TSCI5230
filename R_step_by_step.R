@@ -26,7 +26,7 @@
 debug <- 0;
 knitr::opts_chunk$set(echo=debug>-1, warning=debug>0, message=debug>0);
 
-library(ggplot2); # visualisation
+library(ggplot2); # visualization
 library(GGally);
 library(rio);# simple command for importing and exporting
 library(pander); # format tables
@@ -97,7 +97,7 @@ foo <- log(2); foo
 foo <- exp(100); foo
 log(foo)
 bar <- 5*5; bar
-whatisthis(bar);
+whatisthis(bar); # not sure what this means? _Yun
 print(foo <- 42)
 print (shoo <-67)
 log(((foo*3)+(shoo+2)*sqrt(144)+exp(10)))
@@ -246,6 +246,7 @@ bob
 baz[bob] # pulled the vector less than equal to 23
 print(foo)
 summary(foo)
+str(foo)
 table(foo)
 table(jar) # frequency table
 bat <- sample(1:10, 30, replace = TRUE)
@@ -303,8 +304,7 @@ seq_len(nrow(iris))
 sample(seq_len(nrow(iris)), 10)  # sample without replacement
 sample(seq_len(nrow(iris)), 10, replace= TRUE) # sample with replacement
 iris0 <- iris[sample(seq_len(nrow(iris)), 10),]
-
-#' How to select coulmns in dataset
+#' How to select columns in dataset
 #+ df_columns, error=TRUE, results="hide"
 iris[,1:3] # columns miss 4 and 5
 iris[,c("Petal.Length","Petal.Width","Species")]
@@ -315,7 +315,7 @@ iris[,prevar]
 
 iris$Species # picks the column from dataset by adding $sign
 outcome <- "Species"
-iris$outcome
+iris$outcome # why does return a NULL? _Yun
 iris[[outcome]]
 iris [["Species"]]
 
@@ -327,12 +327,13 @@ iris[4:10,prevar]
 #+ Working with datasets and DPLYR
 
 r"(/Users/YOURNAME/Desktop/projects/tsci/TSCI 5050 self/dataset)" %>% gsub("////","/",.) # to replace anything in the address
-list.files("/Users/YOURNAME/Desktop/projects/tsci/TSCI 5050 self/dataset") # to see anyfiles in the folder
+list.files("/Users/YOURNAME/Desktop/projects/tsci/TSCI 5050 self/dataset") # to see any files in the folder
 
 dtset <- list.files("/Users/YOURNAME/Desktop/projects/tsci/TSCI 5050 self/dataset", full.names = TRUE) %>%
   sapply(import) %>% setNames(.,basename(names(.))) # to change the base names
 example1 <- dtset
 example2 <- example1$Birthweight.sav
+
 
 #+ file_import, echo = FALSE
 # #' ## Importing a File
@@ -348,7 +349,7 @@ example2 <- example1$Birthweight.sav
 # #' Assigning Descriptive Values to a Code
 # mutate(birthweight, AGEMonths = AGE*12, AGEdays= AGEMonths*30.25,
 #        RACEName= case_when(RACE== 1~ "Caucasian",
-#                            RACE== 2~"ASIAN",
+#                            RACE== 2~ "ASIAN",
 #                            RACE== 3~ "AFRICAN AMERICAN/BLACK",
 #                            TRUE~ as.character(RACE))) %>% head()
 #
@@ -380,21 +381,26 @@ example2 <- example1$Birthweight.sav
 #'
 
 #' # Linear Models
+library(ggplot2)
+library(broom)
+library(GGally)
+library(dplyr)
 #+ linear_models
 example(lm) # a sample for linear model
-
+Auto <- read.table("/Users/shiyu/Downloads/Auto.data", header=TRUE) #import Auto.data file, currently in Downloads folder
 perf <- lm(mpg~hp+wt+qsec,mtcars)
 summary(perf) # gives detail summary
 summary(perf)$coeff # gives coefficient column
-glance(perf) #gives brief
+glance(perf) #gives brief #loaded "broom" package
 tidy(perf) # gives tidy cleaner version inside
-lm(mpg~hp+wt+vs,mtcars) %>% tidy() %>% select(c("estimate","p.value"))
+lm(mpg~hp+wt+qsec,mtcars) %>% tidy() %>% select(c("estimate","p.value"))
+
 #+ Debugging
-perf %>% tidy() %>% select(c("estimate","p.value"))
+perf %>% tidy() %>% select(c("estimate","p.value")) #why is the return different from the last code?_Yun
 perf %>% tidy() %>% select(c("estimate","p.value")) %>% slice(-1) # removes top row
 perf %>% tidy() %>% select(c("estimate","p.value")) %>% slice((1:3)) # gives 1 to 3 rows
 perf %>% tidy() %>% select(c("estimate","p.value")) %>% slice(-(1:3)) # removes 1 to 3 rwos
-whatisthis(perf) # gives class of the variable
+whatisthis(perf) # gives class of the variable # could not find function "whatisthis"
 
 #' View(perf) # view inside of object
 
