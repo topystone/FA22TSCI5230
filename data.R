@@ -47,3 +47,4 @@ Table_Names <- path_ext_remove(Unzipped_Data) %>% fs::path_ext_remove() %>% base
 for(ii in seq_along(Unzipped_Data)) assign(Table_Names[ii],import(Unzipped_Data[ii],format='csv'));
 #mapply(function(aa,bb) assign(aa,import(bb,format='csv'),inherits = T),Table_Names,Unzipped_Data)
 save(list=Table_Names,file='data.R.rdata');
+c()
