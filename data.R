@@ -37,32 +37,41 @@ library(fs);    # file system operations
 options(max.print=42);
 panderOptions('table.split.table',Inf); panderOptions('table.split.cells',Inf);
 
-democolumns<-c('subject_id','insurance','language','marital_status','ethnicity')
+lengthunique<-function(xx){
+  unique(xx) %>% length()
+}
+
+uniquevalues<-function(xx){
+  unique(xx) %>% sort() %>% paste(collapse=":")
+    }
+
+
+democolumns<-c('subject_id','insurance','marital_status','ethnicity')
 
 if(!file.exists('data.R.rdata')){
-  #' # Import the data
+  # Import the data
   Input_Data <- 'https://physionet.org/static/published-projects/mimic-iv-demo/mimic-iv-clinical-database-demo-1.0.zip';
   dir.create('data',showWarnings = FALSE);
   Zipped_Data <- file.path("data",'tempdata.zip');
   download.file(Input_Data,destfile = Zipped_Data);
   Unzipped_Data <- unzip(Zipped_Data,exdir = 'data') %>% grep('gz$',.,val=T);
-  Table_Names <- path_ext_remove(Unzipped_Data) %>% fs::path_ext_remove() %>% basename;
+  Table_Names <- path_ext_remove(Unzipped_Data) %>% path_ext_remove() %>% basename;#extract basename from the unzipped files, removes extensions (gz and csv)
   for(ii in seq_along(Unzipped_Data)) assign(Table_Names[ii],import(Unzipped_Data[ii],format='csv'));
+  #seq_along creates a sequence of the same variables used for indexing, importing an unzipped data, assigned to Table_Names
   #mapply(function(aa,bb) assign(aa,import(bb,format='csv'),inherits = T),Table_Names,Unzipped_Data)
   save(list=Table_Names,file='data.R.rdata');
   message("data downloaded")
 } else{
 message("data already present")
+  load("data.R.rdata")
 }
 
-(!is.na(admissions$deathtime))%>%sum()
+sum(!is.na(admissions$deathtime)) # count how many cells in deathtime column is missing
 admissions[,democolumns] %>% unique() %>% nrow()
 
-lengthunique<-function(xx){
-  unique(xx) %>% length()
-}
 
-sapply(admissions[,democolumns],lengthunique)
+
+sapply(admissions[,democolumns],lengthunique) # apply a function(lengthunique) to all democolums in admissions dataframe
 sapply(admissions[,democolumns],function(xx) unique(xx) %>% length())
 
 summarise(admissions[,democolumns]
@@ -74,4 +83,21 @@ summarise(admissions[,democolumns]
           ,across(any_of(democolumns),lengthunique))
 
 
-group_by(admissions,subject_id)%>% summarise(across(any_of(democolumns),lengthunique)) %>% View
+group_by(admissions,subject_id)%>% summarise(across(any_of(democolumns),lengthunique))
+
+#Start a new section
+#' # Demographic Table
+#'
+
+demographics<-group_by(admissions,subject_id) %>%
+  summarise(across(any_of(democolumns), uniquevalues),
+          deceased=any(!is.na(deathtime)),
+          deathtime=max(deathtime, na.rm = TRUE)) %>%
+  mutate(ethnicity=gsub("UNKNOWN;","",ethnicity)) %>%
+  mutate(ethnicity=gsub("UNABLE TO OBTAIN","UNKNOWN",ethnicity)) %>%
+  left_join(patients[,1:3])
+
+
+demographics$deathtime %>% class()
+demographics[is.infinite(demographics$deathtime),"deathtime"]=NA
+
