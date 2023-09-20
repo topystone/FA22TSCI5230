@@ -33,6 +33,9 @@ library(printr); # automatically invoke pander when tables are detected
 library(broom); # standardized, enhanced views of various objects
 library(dplyr); # table manipulation
 library(fs);    # file system operations
+library(purrr) # package contains map2
+library(tidyr) # package contains unnest
+
 
 options(max.print=42);
 panderOptions('table.split.table',Inf); panderOptions('table.split.cells',Inf);
@@ -71,13 +74,12 @@ admissions[,democolumns] %>% unique() %>% nrow()
 
 
 
-sapply(admissions[,democolumns],lengthunique) # apply a function(lengthunique) to all democolums in admissions dataframe
+sapply(admissions[,democolumns],lengthunique) # apply a function(lengthunique) to all democolumns in admissions dataframe
 sapply(admissions[,democolumns],function(xx) unique(xx) %>% length())
 
 summarise(admissions[,democolumns]
           ,subject_id=lengthunique(subject_id)
-          ,insurance=lengthunique(insurance)
-          ,language=lengthunique(language))
+          ,insurance=lengthunique(insurance)) # language column has been removed from democolumns already
 
 summarise(admissions[,democolumns]
           ,across(any_of(democolumns),lengthunique))
@@ -100,4 +102,31 @@ demographics<-group_by(admissions,subject_id) %>%
 
 demographics$deathtime %>% class()
 demographics[is.infinite(demographics$deathtime),"deathtime"]=NA
+
+named_outputevents<-left_join(outputevents,d_items,by=c(itemid='itemid'))
+named_labevents<-left_join(labevents,d_labitems)
+named_chartevents<-left_join(chartevents,d_items)
+named_diagnoses<-left_join(diagnoses_icd,d_icd_diagnoses)
+
+# A list of variable (labs/Glucose, A1c, hypoglycemia/diagnosis, death, icu stay, length of icu stay)
+#select(admissions,subject_id,hadm_id,admittime,dischtime)
+
+# map2(admittime,dischtime,function(xx,yy) {seq(trunc(xx,u="days"),yy,by="day")})
+# created a list
+
+adm_Dates<-transmute(admissions,hadm_id=hadm_id,subject_id=subject_id,
+                     date=map2(admittime,dischtime,function(xx,yy)
+                       {seq(trunc(xx,u="days"),yy,by="day")})) %>% unnest
+# create a scaffold of admission dates
+
+#adm_table = admissions %>% transmute( hadm_id = hadm_id, subject_id = subject_id,
+los = ceiling(as.numeric(dischtime - admittime) / 24),
+date = purrr::map2(admittime,dischtime, function(xx,yy) seq(trunc(xx,units = 'days'),yy, by = 'day'))
+
+
+#Homework (9/20/23): create a table with the above scaffold, add an additional column of stay_id in icustays, NA for non-icu stay days, expand on intime and outtime
+
+# another example: by=c(itemid='itemid',date='date') if each entry is indexed by both itemid and date
+# Dataexplore::create_report()
+# explore::exlore_shiny()
 
