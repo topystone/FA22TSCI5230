@@ -25,7 +25,7 @@
 debug <- 0;
 knitr::opts_chunk$set(echo=debug>-1, warning=debug>0, message=debug>0);
 
-library(ggplot2); # visualisation
+library(ggplot2); # visualization
 library(GGally);
 library(rio);# simple command for importing and exporting data
 library(pander); # format tables
@@ -35,6 +35,7 @@ library(dplyr); # table manipulation
 library(fs);    # file system operations
 library(purrr) # package contains map2
 library(tidyr) # package contains unnest
+library(stringr) #string operations
 
 
 options(max.print=42);
@@ -42,11 +43,11 @@ panderOptions('table.split.table',Inf); panderOptions('table.split.cells',Inf);
 
 lengthunique<-function(xx){
   unique(xx) %>% length()
-}
+} # function of length of each unique variables
 
 uniquevalues<-function(xx){
   unique(xx) %>% sort() %>% paste(collapse=":")
-    }
+    } # function of paste each unique values in ascending order and separated by ":" inbetween
 
 
 democolumns<-c('subject_id','insurance','marital_status','ethnicity')
@@ -55,7 +56,7 @@ if(!file.exists('data.R.rdata')){
   # Import the data
   Input_Data <- 'https://physionet.org/static/published-projects/mimic-iv-demo/mimic-iv-clinical-database-demo-1.0.zip';
   dir.create('data',showWarnings = FALSE);
-  Zipped_Data <- file.path("data",'tempdata.zip');
+  Zipped_Data <- file.path("data",'tempdata.zip'); # set file path of data\tempdata.zip
   download.file(Input_Data,destfile = Zipped_Data);
   Unzipped_Data <- unzip(Zipped_Data,exdir = 'data') %>% grep('gz$',.,val=T);
   Table_Names <- path_ext_remove(Unzipped_Data) %>% path_ext_remove() %>% basename;#extract basename from the unzipped files, removes extensions (gz and csv)
@@ -69,23 +70,23 @@ message("data already present")
   load("data.R.rdata")
 }
 
-sum(!is.na(admissions$deathtime)) # count how many cells in deathtime column is missing
-admissions[,democolumns] %>% unique() %>% nrow()
+sum(!is.na(admissions$deathtime)) # total number of non-missing values in deathtime column
+admissions[,democolumns] %>% unique() %>% nrow() # count numbers of unique rows in democolumns
 
 
 
 sapply(admissions[,democolumns],lengthunique) # apply a function(lengthunique) to all democolumns in admissions dataframe
-sapply(admissions[,democolumns],function(xx) unique(xx) %>% length())
+sapply(admissions[,democolumns],function(xx) unique(xx) %>% length()) # alternative code, which perform the same function as the one above
 
 summarise(admissions[,democolumns]
           ,subject_id=lengthunique(subject_id)
           ,insurance=lengthunique(insurance)) # language column has been removed from democolumns already
 
 summarise(admissions[,democolumns]
-          ,across(any_of(democolumns),lengthunique))
+          ,across(any_of(democolumns),lengthunique)) # apply lengthunique function across multiple columns
 
 
-group_by(admissions,subject_id)%>% summarise(across(any_of(democolumns),lengthunique))
+group_by(admissions,subject_id)%>% summarise(across(any_of(democolumns),lengthunique)) %>% head()
 
 #Start a new section
 #' # Demographic Table
@@ -94,7 +95,7 @@ group_by(admissions,subject_id)%>% summarise(across(any_of(democolumns),lengthun
 demographics<-group_by(admissions,subject_id) %>%
   summarise(across(any_of(democolumns), uniquevalues),
           deceased=any(!is.na(deathtime)),
-          deathtime=max(deathtime, na.rm = TRUE)) %>%
+          deathtime=max(deathtime, na.rm = TRUE)) %>% # na.rm: a logical indicating whether missing values should be removed
   mutate(ethnicity=gsub("UNKNOWN;","",ethnicity)) %>%
   mutate(ethnicity=gsub("UNABLE TO OBTAIN","UNKNOWN",ethnicity)) %>%
   left_join(patients[,1:3])
@@ -114,14 +115,52 @@ named_diagnoses<-left_join(diagnoses_icd,d_icd_diagnoses)
 # map2(admittime,dischtime,function(xx,yy) {seq(trunc(xx,u="days"),yy,by="day")})
 # created a list
 
-adm_Dates<-transmute(admissions,hadm_id=hadm_id,subject_id=subject_id,
-                     date=map2(admittime,dischtime,function(xx,yy)
-                       {seq(trunc(xx,u="days"),yy,by="day")})) %>% unnest
 # create a scaffold of admission dates
+adm_Dates<-transmute(admissions,hadm_id=hadm_id,subject_id=subject_id,
+                     los=ceiling(as.numeric(dischtime - admittime)) / 24,
+                     date=map2(admittime,dischtime,function(xx,yy)
+                       {seq(trunc(xx,units = "days"),yy,by="day")})) %>% unnest()
 
-#adm_table = admissions %>% transmute( hadm_id = hadm_id, subject_id = subject_id,
-los = ceiling(as.numeric(dischtime - admittime) / 24),
-date = purrr::map2(admittime,dischtime, function(xx,yy) seq(trunc(xx,units = 'days'),yy, by = 'day'))
+
+# icu stay dates
+
+icu_Dates = icustays %>% transmute(hadm_id, subject_id, stay_id,
+                                   ICUlos=los,
+                                   ICU_los_revised = ceiling(as.numeric(outtime - intime) / 1440),
+                                   ICU_date = purrr::map2(intime,outtime,
+                       function(xx,yy) seq(trunc(xx,units = 'days'),yy, by = 'day'))) %>%
+  tidyr::unnest(ICU_date) %>%
+  group_by(hadm_id,subject_id,ICU_date)%>%
+  #summarise(ICUlos=paste(ICUlos,collapse = "|"),stay_id=paste(stay_id,collapse ="|"))
+summarise(ICUlos = list(ICUlos),stay_id = list(stay_id))
+# now the columns ICUlos and stay_id are lists, not numbers such as NA
+
+
+#Combined admissions and ICU_Dates
+MainData<-left_join(adm_Dates,icu_Dates, by=c("hadm_id"="hadm_id","subject_id"="subject_id","date"="ICU_date"))
+
+
+MainData_icd<-c("E11649","E161","E162","E160") %>% paste(.,collapse = "|") %>% {subset(named_diagnoses,grepl(.,icd_code))}
+
+#Homework: left join our selected ICD-10 coes to be "yes or no hypoglycemia" (9/27/23)
+
+
+
+# any data frame which contains stay_id, what are the column names
+sapply(.GlobalEnv, is.data.frame) %>% .[.] %>% names(.) %>% sapply(.,function(xx) get(xx) %>% colnames() %>% grepl('stay_id',.) %>% any()) %>% .[.] %>% names() %>% sapply(.,function(xx) get(xx) %>% colnames())
+
+# CODES IN PROGRESS
+
+# icu_Dates<-transmute(icustays,hamd_id,subject_id,stay_id,los = ceiling(as.numeric(outtime - intime)/24), date=map2(intime,outtime,function(xx,yy)
+# seq(trunc(xx,units = 'days'),yy,by='day')) %>% unnest
+
+# left join adm_Dates and icu_Dates
+adm_icu_Dates<-left_join(adm_Dates,icu_Dates, by=c("hadm_id"="hadm_id","subject_id"="subject_id","date"="ICU_date"))
+
+
+# adm_table = admissions %>% transmute( hadm_id = hadm_id, subject_id = subject_id,
+                                      los = ceiling(as.numeric(dischtime - admittime) / 24)
+                                      date = purrr::map2(admittime,dischtime, function(xx,yy) seq(trunc(xx,units = 'days'),yy, by = 'day'))
 
 
 #Homework (9/20/23): create a table with the above scaffold, add an additional column of stay_id in icustays, NA for non-icu stay days, expand on intime and outtime
@@ -129,4 +168,19 @@ date = purrr::map2(admittime,dischtime, function(xx,yy) seq(trunc(xx,units = 'da
 # another example: by=c(itemid='itemid',date='date') if each entry is indexed by both itemid and date
 # Dataexplore::create_report()
 # explore::exlore_shiny()
+
+# .GlobalEnv
+# sapply(.GlobalEnv, is.data.frame) %>% .[.] %>% names(.) %>% sapply(.,function(xx)get(xx))
+# sapply(.GlobalEnv, is.data.frame) %>% .[.] %>% names(.) %>% sapply(.,function(xx) get(xx) %>% colnames() %>% grepl('stay_id',.) %>% any())
+# sapply(.GlobalEnv, is.data.frame) %>% .[.] %>% names(.) %>% sapply(.,function(xx) get(xx) %>% colnames() %>% str_detect(.,'stay_id') %>% any())
+icu_Dates %>% group_by(subject_id, ICU_date) %>%
+                                      summarise(number=n(),number_stays=length(unique(stay_id))) %>%
+                                        subset(number>1) %>% pull(subject_id) %>% {subset(icustays,subject_id %in% .)}
+
+icu_Dates %>% group_by(subject_id, ICU_date) %>%
+  +                                       summarise(number=n(),number_stays=length(unique(stay_id))) %>%
+  +                                         subset(number>1) %>% pull(subject_id) %>% {subset(icustays,subject_id %in% .)}
+
+named_diagnoses[grep("hypogly",named_diagnoses$long_title,ignore.case = TRUE),]
+#grep(c("E1164*","E15","E16"),named_diagnoses$icd_cod)
 
