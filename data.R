@@ -23,6 +23,7 @@
 # This part does not show up in your rendered report, only in the script,
 # because we are using regular comments instead of #' comments
 debug <- 0;
+upload_to_google<-0
 knitr::opts_chunk$set(echo=debug>-1, warning=debug>0, message=debug>0);
 
 library(ggplot2); # visualization
@@ -39,19 +40,25 @@ library(stringr); #string operations
 
 
 options(max.print=42);
+options(datatable.na.strings=c('NA','NULL',''))
 panderOptions('table.split.table',Inf); panderOptions('table.split.cells',Inf);
 
 lengthunique<-function(xx){
   unique(xx) %>% length()
-} # function of length of each unique variables
+}
+# function of length of each unique variables
 
 uniquevalues<-function(xx){
   unique(xx) %>% sort() %>% paste(collapse=":")
   }
 # function of paste each unique values in ascending order and separated by ":" inbetween
 
+count_by_freq=.%>% summarise(n=n(),patients=lengthunique(subject_id)) %>% arrange(desc(n))
+# save a pipe line as a function
 
 democolumns<-c('subject_id','insurance','marital_status','ethnicity')
+
+Starting_Names<-ls()
 
 if(!file.exists('data.R.rdata')){
   # Import the data
@@ -69,6 +76,7 @@ if(!file.exists('data.R.rdata')){
 } else{
 message("data already present")
   load("data.R.rdata")
+  Table_Names<-setdiff(ls(),c(Starting_Names,"Starting_Names"))
 }
 
 sum(!is.na(admissions$deathtime))
@@ -141,14 +149,16 @@ icu_Dates = icustays %>% transmute(hadm_id, subject_id, stay_id,
                                    ICU_date = purrr::map2(intime,outtime,
                        function(xx,yy) seq(trunc(xx,units = 'days'),yy, by = 'day'))) %>%
   tidyr::unnest(ICU_date) %>%
-group_by(hadm_id,subject_id,ICU_date) %>%
+  group_by(hadm_id,subject_id,ICU_date) %>%
 # summarise(ICUlos=paste(ICUlos,collapse = "|"),stay_id=paste(stay_id,collapse ="|"))
 summarise(ICUlos = list(ICUlos),stay_id = list(stay_id)) #"ERROR in n ()
 # now the columns ICUlos and stay_id are lists, not numbers such as NA
 
-htn_adm<-named_diagnoses %>% subset(str_detect(tolower(long_title),'hypertens')) %>% pull(hadm_id) %>%  unique()
+htn_adm<-named_diagnoses %>% subset(str_detect(tolower(long_title),'hypertens')) %>% pull(hadm_id) %>% unique()
 
-hypoG_adm=MainData_icd<-c("E11649","E161","E162","E160","E15","E13141") %>% paste(.,collapse = "|") %>% {subset(named_diagnoses,grepl(.,icd_code))} %>% pull(hadm_id)
+hypoG_adm=MainData_icd<-c("E11649","E161","E162","E160","E15","E13141") %>% paste(.,collapse = "|") %>%
+  {subset(named_diagnoses,grepl(.,icd_code))} %>%
+  pull(hadm_id) %>% unique()
 # The subset function is used to select rows from the named_diagnoses dataset
 # where the grepl function returned TRUE.
 # This effectively filters the dataset to include only rows with ICD-10 codes
@@ -158,6 +168,35 @@ hypoG_adm=MainData_icd<-c("E11649","E161","E162","E160","E15","E13141") %>% past
 MainData<-left_join(adm_Dates,icu_Dates, by=c("hadm_id"="hadm_id","subject_id"="subject_id","date"="ICU_date")) %>%
   mutate(hypertension=hadm_id %in% htn_adm,
          hypoglycemia=hadm_id %in% hypoG_adm)
+
+named_labevents %>% group_by(category,fluid,loinc_code,label) %>%
+  summarize(n=n(),patients=lengthunique(subject_id)) %>%
+  arrange(desc(n)) %>% View()
+
+pH_table=named_labevents %>% mutate(charttime=as.Date(charttime)) %>%
+  filter(itemid==50820) %>%
+  group_by(subject_id,charttime) %>%
+  summarise(pH=min(valuenum),pH_flag=any(flag=='abnormal')) %>%
+  arrange(desc(pH))
+
+
+
+# named variables
+VS_abbrev<-c(mSBP='Non Invasive Blood Pressure Systolic Left',aSBP='Arterial Blood Pressure systolic',HR='Heart Rate')
+
+analytic_event<-named_chartevents %>% mutate(charttime=as.Date(charttime)) %>%
+  group_by(label,subject_id,charttime) %>%
+  filter(label %in% VS_abbrev) %>%
+           summarise(Median_Value = median(valuenum,na.rm=TRUE)) %>%
+  pivot_wider(values_from = Median_Value,names_from = label) %>%
+  rename(any_of(VS_abbrev))
+
+MainData<-MainData %>%
+  left_join(pH_table, by=c('subject_id','date'='charttime')) %>%
+  mutate(pH=coalesce(pH, 7.4)) %>%
+  left_join(analytic_event, by=c('subject_id','date'='charttime')) %>%
+  left_join(demographics)
+# adding missing value of pH, assign it to 7.4
 
 
 
@@ -200,10 +239,17 @@ sapply(.GlobalEnv, is.data.frame) %>% .[.] %>% names(.) %>%
 # summarise(number=n(),number_stays=length(unique(stay_id))) %>%
 # subset(number>1) %>% pull(subject_id) %>% {subset(icustays,subject_id %in% .)}
 
-icu_Dates %>% group_by(subject_id, ICU_date) %>%
-  +                                       summarise(number=n(),number_stays=length(unique(stay_id))) %>%
-  +                                         subset(number>1) %>% pull(subject_id) %>% {subset(icustays,subject_id %in% .)}
+# icu_Dates %>% group_by(subject_id, ICU_date) %>%
+#  summarise(n=n(),number_stays=length(unique(stay_id))) %>%
+#  subset(number>1) %>% pull(subject_id) %>% {subset(icustays,subject_id %in% .)}
 
-named_diagnoses[grep("hypogly",named_diagnoses$long_title,ignore.case = TRUE),]
-#grep(c("E1164*","E15","E16"),named_diagnoses$icd_cod)
+# named_diagnoses[grep("hypogly",named_diagnoses$long_title,ignore.case = TRUE),]
+# grep(c("E1164*","E15","E16"),named_diagnoses$icd_cod)
 
+
+# SQL
+
+if(upload_to_google){gar_cache_empty()
+gar_set_client("Service_Account_SQL.json")
+bqr_auth(email="topystone@gmail.com")
+bqr_upload_data("inspiring-tower-401719","Class_Test_Dataset","labevents",labevents)}
