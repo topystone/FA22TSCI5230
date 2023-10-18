@@ -23,7 +23,7 @@
 # This part does not show up in your rendered report, only in the script,
 # because we are using regular comments instead of #' comments
 debug <- 0;
-upload_to_google<-0
+upload_to_google<-1
 knitr::opts_chunk$set(echo=debug>-1, warning=debug>0, message=debug>0);
 
 library(ggplot2); # visualization
@@ -69,16 +69,15 @@ if(!file.exists('data.R.rdata')){
   download.file(Input_Data,destfile = Zipped_Data);
   Unzipped_Data <- unzip(Zipped_Data,exdir = 'data') %>% grep('gz$',.,val=T);
   Table_Names <- path_ext_remove(Unzipped_Data) %>% path_ext_remove() %>% basename;#extract basename from the unzipped files, removes extensions (gz and csv)
-  for(ii in seq_along(Unzipped_Data)) assign(Table_Names[ii],import(Unzipped_Data[ii],format='csv'));
+  for(ii in seq_along(Unzipped_Data)) assign(Table_Names[ii],import(Unzipped_Data[ii],format='csv',fread=FALSE));
   #seq_along creates a sequence of the same variables used for indexing, importing an unzipped data, assigned to Table_Names
   #mapply(function(aa,bb) assign(aa,import(bb,format='csv'),inherits = T),Table_Names,Unzipped_Data)
-  save(list=Table_Names,file='data.R.rdata');
+  save(list=c(Table_Names,'Table_Names'),file='data.R.rdata');
   message("data downloaded")
 } else{
 message("data already present")
   load("data.R.rdata")
-  Table_Names<-setdiff(ls(),c(Starting_Names,"Starting_Names"))
-}
+  }
 
 sum(!is.na(admissions$deathtime))
 # total number of non-missing values in deathtime column
@@ -172,7 +171,7 @@ MainData<-left_join(adm_Dates,icu_Dates, by=c("hadm_id"="hadm_id","subject_id"="
 
 named_labevents %>% group_by(category,fluid,loinc_code,label) %>%
   summarize(n=n(),patients=lengthunique(subject_id)) %>%
-  arrange(desc(n)) %>% View()
+  arrange(desc(n))
 
 pH_table=named_labevents %>% mutate(charttime=as.Date(charttime)) %>%
   filter(itemid==50820) %>%
@@ -212,7 +211,7 @@ named_diagnoses %>% subset(str_detect(long_title,'hypertens')) %>% select(icd_co
 # select: data fram
 # pull: TRUE or FALSE
 
-htn_adm<-named_diagnoses %>% subset(str_detect(tolower(long_title),'hypertens')) %>% select(hadm_id) %>%  unique() %>% View()
+htn_adm<-named_diagnoses %>% subset(str_detect(tolower(long_title),'hypertens')) %>% select(hadm_id) %>%  unique()
 
 # any data frame which contains stay_id, what are the column names
 sapply(.GlobalEnv, is.data.frame) %>% .[.] %>% names(.) %>%
@@ -248,12 +247,12 @@ sapply(.GlobalEnv, is.data.frame) %>% .[.] %>% names(.) %>%
 # grep(c("E1164*","E15","E16"),named_diagnoses$icd_cod)
 
 
-# SQL
+# SQL (BigQuery)
 
 if(upload_to_google){gar_cache_empty()
 gar_set_client("Service_Account_SQL.json")
-bqr_auth(email="topystone@gmail.com")
-bqr_upload_data("inspiring-tower-401719","Class_Test_Dataset","labevents",labevents)}
+bqr_auth(email="topystone@gmail.com")}
+#bqr_upload_data("inspiring-tower-401719","Class_Test_Dataset",Table_Names,get(Table_Names))}
 
-# Homework (10/11/23): upload all tables
-bqr_upload_data("inspiring-tower-401719","Class_Test_Dataset",Table_Names[2],get(Table_Names[2]))
+lapply(Table_Names,function(xx){bqr_upload_data("inspiring-tower-401719","Class_Test_Dataset",xx,get(xx))})
+# can use lapply or for loop
