@@ -37,7 +37,8 @@ library(fs);    # file system operations
 library(purrr); # package contains map2
 library(tidyr); # package contains unnest
 library(stringr); #string operations
-
+library(googleAuthR)
+library(bigQueryR)
 
 options(max.print=42);
 options(datatable.na.strings=c('NA','NULL',''))
@@ -231,7 +232,7 @@ sapply(.GlobalEnv, is.data.frame) %>% .[.] %>% names(.) %>%
 # explore::exlore_shiny()
 
 # .GlobalEnv
-# sapply(.GlobalEnv, is.data.frame) %>% .[.] %>% names(.) %>% sapply(.,function(xx)get(xx))
+# sapply(.GlobalEnv, is.data.frame) %>% .[.] %>% names(.) %>% sapply(.,function(xx) get(xx))
 # sapply(.GlobalEnv, is.data.frame) %>% .[.] %>% names(.) %>% sapply(.,function(xx) get(xx) %>% colnames() %>% grepl('stay_id',.) %>% any())
 # sapply(.GlobalEnv, is.data.frame) %>% .[.] %>% names(.) %>% sapply(.,function(xx) get(xx) %>% colnames() %>% str_detect(.,'stay_id') %>% any())
 
@@ -240,7 +241,7 @@ sapply(.GlobalEnv, is.data.frame) %>% .[.] %>% names(.) %>%
 # subset(number>1) %>% pull(subject_id) %>% {subset(icustays,subject_id %in% .)}
 
 # icu_Dates %>% group_by(subject_id, ICU_date) %>%
-#  summarise(n=n(),number_stays=length(unique(stay_id))) %>%
+# summarise(n=n(),number_stays=length(unique(stay_id))) %>%
 #  subset(number>1) %>% pull(subject_id) %>% {subset(icustays,subject_id %in% .)}
 
 # named_diagnoses[grep("hypogly",named_diagnoses$long_title,ignore.case = TRUE),]
@@ -253,3 +254,6 @@ if(upload_to_google){gar_cache_empty()
 gar_set_client("Service_Account_SQL.json")
 bqr_auth(email="topystone@gmail.com")
 bqr_upload_data("inspiring-tower-401719","Class_Test_Dataset","labevents",labevents)}
+
+# Homework (10/11/23): upload all tables
+bqr_upload_data("inspiring-tower-401719","Class_Test_Dataset",Table_Names[2],get(Table_Names[2]))
