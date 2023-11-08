@@ -25,6 +25,7 @@
 debug <- 0;
 upload_to_google<-1
 knitr::opts_chunk$set(echo=debug>-1, warning=debug>0, message=debug>0);
+refresh<-1
 
 library(ggplot2); # visualization
 library(GGally);
@@ -61,7 +62,7 @@ democolumns<-c('subject_id','insurance','marital_status','ethnicity')
 
 Starting_Names<-ls()
 
-if(!file.exists('data.R.rdata')){
+if(!file.exists('data.R.rdata')|refresh){
   # Import the data
   Input_Data <- 'https://physionet.org/static/published-projects/mimic-iv-demo/mimic-iv-clinical-database-demo-1.0.zip';
   dir.create('data',showWarnings = FALSE);
@@ -69,9 +70,14 @@ if(!file.exists('data.R.rdata')){
   download.file(Input_Data,destfile = Zipped_Data);
   Unzipped_Data <- unzip(Zipped_Data,exdir = 'data') %>% grep('gz$',.,val=T);
   Table_Names <- path_ext_remove(Unzipped_Data) %>% path_ext_remove() %>% basename;#extract basename from the unzipped files, removes extensions (gz and csv)
-  for(ii in seq_along(Unzipped_Data)) assign(Table_Names[ii],import(Unzipped_Data[ii],format='csv',fread=FALSE));
+  for(ii in seq_along(Unzipped_Data)) {
+    assign(Table_Names[ii]
+           ,import(Unzipped_Data[ii],format='csv') #%>% #{xx=.;browser();xx} %>%  debug in a pipeline
+             #mutate(across(is('IDate'),~as.Date(.x)))
+           )};
   #seq_along creates a sequence of the same variables used for indexing, importing an unzipped data, assigned to Table_Names
   #mapply(function(aa,bb) assign(aa,import(bb,format='csv'),inherits = T),Table_Names,Unzipped_Data)
+  #~as.Date(.x) can also be writen "as.Date"
   save(list=c(Table_Names,'Table_Names'),file='data.R.rdata');
   message("data downloaded")
 } else{
