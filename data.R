@@ -42,8 +42,10 @@ library(googleAuthR)
 library(bigQueryR)
 
 options(max.print=42);
-options(datatable.na.strings=c('NA','NULL',''))
+options(datatable.na.strings=c('NA','NULL','')) #defines what is treated as missing/NA
+options(datatable.integer64='numeric')
 panderOptions('table.split.table',Inf); panderOptions('table.split.cells',Inf);
+
 
 lengthunique<-function(xx){
   unique(xx) %>% length()
@@ -67,13 +69,13 @@ if(!file.exists('data.R.rdata')|refresh){
   Input_Data <- 'https://physionet.org/static/published-projects/mimic-iv-demo/mimic-iv-clinical-database-demo-1.0.zip';
   dir.create('data',showWarnings = FALSE);
   Zipped_Data <- file.path("data",'tempdata.zip'); # set file path of data\tempdata.zip
-  download.file(Input_Data,destfile = Zipped_Data);
+  if(!file.exists(Zipped_Data)) download.file(Input_Data,destfile = Zipped_Data);
   Unzipped_Data <- unzip(Zipped_Data,exdir = 'data') %>% grep('gz$',.,val=T);
   Table_Names <- path_ext_remove(Unzipped_Data) %>% path_ext_remove() %>% basename;#extract basename from the unzipped files, removes extensions (gz and csv)
   for(ii in seq_along(Unzipped_Data)) {
     assign(Table_Names[ii]
-           ,import(Unzipped_Data[ii],format='csv') #%>% #{xx=.;browser();xx} %>%  debug in a pipeline
-             #mutate(across(is('IDate'),~as.Date(.x)))
+           ,import(Unzipped_Data[ii],format='csv') %>%
+           mutate(across(where(~is(.x, "IDate")),as.Date))
            )};
   #seq_along creates a sequence of the same variables used for indexing, importing an unzipped data, assigned to Table_Names
   #mapply(function(aa,bb) assign(aa,import(bb,format='csv'),inherits = T),Table_Names,Unzipped_Data)
@@ -260,5 +262,5 @@ gar_set_client("Service_Account_SQL.json")
 bqr_auth(email="topystone@gmail.com")}
 #bqr_upload_data("inspiring-tower-401719","Class_Test_Dataset",Table_Names,get(Table_Names))}
 
-lapply(Table_Names,function(xx){bqr_upload_data("inspiring-tower-401719","Class_Test_Dataset",xx,get(xx))})
+lapply(Table_Names,function(xx){message(xx);bqr_upload_data("inspiring-tower-401719","Class_Test_Dataset",xx,get(xx))})
 # can use lapply or for loop
