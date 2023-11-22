@@ -157,7 +157,7 @@ icu_Dates = icustays %>% transmute(hadm_id, subject_id, stay_id,
                                    ICU_date = purrr::map2(intime,outtime,
                        function(xx,yy) seq(trunc(xx,units = 'days'),yy, by = 'day'))) %>%
   tidyr::unnest(ICU_date) %>%
-  mutate(icu_date~as.Date(icu_date)) %>%
+  mutate(icu_date=as.Date(ICU_date)) %>%
   group_by(hadm_id,subject_id,ICU_date) %>%
 # summarise(ICUlos=paste(ICUlos,collapse = "|"),stay_id=paste(stay_id,collapse ="|"))
 summarise(ICUlos = list(ICUlos),stay_id = list(stay_id)) #"ERROR in n ()
@@ -261,12 +261,12 @@ sapply(.GlobalEnv, is.data.frame) %>% .[.] %>% names(.) %>%
 if(upload_to_google){gar_cache_empty()
 gar_set_client("Service_Account_SQL.json")
 bqr_auth(email="topystone@gmail.com")
-bqr_upload_data("inspiring-tower-401719","Class_Test_Dataset",'icu_Dates', get('icu_Dates'[,1:3])
-
+lapply(Table_Names,function(xx){message(xx);bqr_upload_data("inspiring-tower-401719","Class_Test_Dataset",xx,get(xx))})
+# can use lapply or for loop
+}
 
 export(icu_Dates,'icu_Dates.csv')
 
 #bqr_upload_data("inspiring-tower-401719","Class_Test_Dataset",Table_Names,get(Table_Names))}
 
-lapply(Table_Names,function(xx){message(xx);bqr_upload_data("inspiring-tower-401719","Class_Test_Dataset",xx,get(xx))})
-# can use lapply or for loop
+#bqr_upload_data("inspiring-tower-401719","Class_Test_Dataset",'icu_Dates', get('icu_Dates'[,1:3])
