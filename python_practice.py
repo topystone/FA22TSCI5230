@@ -1,3 +1,6 @@
+import pandas as pd
+import os
+
 # Setting vaiables
 
 foo = 1;
@@ -15,8 +18,9 @@ c2=[9,-1,1.8];
 c3=c1+c2; # use + to combine list
 c3;
 
-# example of a dictonary
-dictonary1={'var_a' : 3, 'var_b': 15, 'var_c' : 0}; #var_a called keys, 3 is called values
+# example of a dictonary (class)
+dictonary1={'var_a' : 3, 'var_b': 15, 'var_c' : 0}; #instance of the class
+#var_a called keys, 3 is called values
 dictonary1['var_b'];
 dictonary1.get('var_b')
 zoo=dictonary1.get('var_x')
@@ -46,6 +50,22 @@ dictonary1.items();
 
 #Commonly used types: str, int, float
 
+
 """list vs vector, different in R
 in python, "dictionary" is  a collection of values of variable types and can only be referrenced by names
 list can be any type, can be referenced by location. list can contain other list in python"""
+
+
+#Pandas
+
+df00 = pd.read_csv('data/mimic-iv-clinical-database-demo-1.0/hosp/d_hcpcs.csv.gz')
+df00
+os.listdir('data/mimic-iv-clinical-database-demo-1.0/')
+# [xx for xx,yy,zz in os.walk('data')]
+# [ww for ww in zz for xx,yy,zz in os.walk('data') if ww.endswith ('.gz')]
+# 
+# [filename for filename in filenames for dirpath, dirnames, filenames in os.walk('data/mimic-iv-clinical-database-demo-1.0/') if filename.endswith('.gz') ]
+
+directory = 'data/mimic-iv-clinical-database-demo-1.0/'
+gz_files = [pd.read_csv (dirpath + "/" + filename) for dirpath, dirnames, filenames in os.walk(directory) 
+              for filename in filenames if filename.endswith('.gz')]
