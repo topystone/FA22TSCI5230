@@ -23,9 +23,16 @@
 # This part does not show up in your rendered report, only in the script,
 # because we are using regular comments instead of #' comments
 debug <- 0;
-upload_to_google<-0
+upload_to_google <- 0;
 knitr::opts_chunk$set(echo=debug>-1, warning=debug>0, message=debug>0);
-refresh<-1
+refresh <- 0;
+
+authemail <- 'topystone@gmail.com'
+projectid <- 'inspiring-tower-401719'
+datasetid <- 'Class_Test_Dataset'
+
+# If you have a config_local.R, you can use it to override the default values above
+if(file.exists('config_local.R')) source('config_local.R');
 
 library(ggplot2); # visualization
 library(GGally);
@@ -38,48 +45,61 @@ library(fs);    # file system operations
 library(purrr); # package contains map2
 library(tidyr); # package contains unnest
 library(stringr); #string operations
-library(googleAuthR)
-library(bigQueryR)
+library(googleAuthR); # interacting with Google BigQuery
+library(bigQueryR);
+library(DataExplorer);
+library(explore);
 
 options(max.print=42);
-options(datatable.na.strings=c('NA','NULL','')) #defines what is treated as missing/NA
-options(datatable.integer64='numeric')
+options(datatable.na.strings=c('NA','NULL','')); #defines what is treated as missing/NA
+options(datatable.integer64='numeric');
 panderOptions('table.split.table',Inf); panderOptions('table.split.cells',Inf);
 
 
-lengthunique<-function(xx){
+# function of length of each unique variables
+lengthunique <- function(xx){
   unique(xx) %>% length()
 }
-# function of length of each unique variables
 
-uniquevalues<-function(xx){
+# function of paste each unique values in ascending order and separated by ":" inbetween
+uniquevalues <- function(xx){
   unique(xx) %>% sort() %>% paste(collapse=":")
   }
-# function of paste each unique values in ascending order and separated by ":" inbetween
 
-count_by_freq=.%>% summarise(n=n(),patients=lengthunique(subject_id)) %>% arrange(desc(n))
-# save a pipe line as a function
+# you can save a pipe line as a function by starting it with '.'
+count_by_freq <- . %>% summarise(n=n(),patients=lengthunique(subject_id)) %>% arrange(desc(n));
 
 democolumns<-c('subject_id','insurance','marital_status','ethnicity')
 
+# get a vector of all the objects created by this script so far by running the ls()
+# command with no arguments
 Starting_Names<-ls()
 
+# Only take the time to obtain and extract data if data.R.rdata doesn't already
+# exist
 if(!file.exists('data.R.rdata')|refresh){
   # Import the data
   Input_Data <- 'https://physionet.org/static/published-projects/mimic-iv-demo/mimic-iv-clinical-database-demo-1.0.zip';
   dir.create('data',showWarnings = FALSE);
-  Zipped_Data <- file.path("data",'tempdata.zip'); # set file path of data\tempdata.zip
+  # set file path of data\tempdata.zip
+  Zipped_Data <- file.path("data",'tempdata.zip');
+  # Only download the zipped file if THAT doesn't exist
   if(!file.exists(Zipped_Data)) download.file(Input_Data,destfile = Zipped_Data);
   Unzipped_Data <- unzip(Zipped_Data,exdir = 'data') %>% grep('gz$',.,val=T);
-  Table_Names <- path_ext_remove(Unzipped_Data) %>% path_ext_remove() %>% basename;#extract basename from the unzipped files, removes extensions (gz and csv)
+  #extract basename from the unzipped files, removes extensions (gz and csv)
+  Table_Names <- path_ext_remove(Unzipped_Data) %>% path_ext_remove() %>% basename;
+  # importing, unzipping, and assigning each file to the corresponding item in Table_Names
+  # seq_along creates a sequence of consecutive integers used for iterating through the table names and files
   for(ii in seq_along(Unzipped_Data)) {
     assign(Table_Names[ii]
            ,import(Unzipped_Data[ii],format='csv') %>%
-           mutate(across(where(~is(.x, "IDate")),as.Date))
+             # If a function's name is given directly, it's assumed that the first
+             # argument is going to be the name of the column. If you need it to
+             # be something other than the default first argument use this syntax:
+             # ~as.Date(.x) where .x represents the current column name
+             mutate(across(where(~is(.x, "IDate")),as.Date))
            )};
-  #seq_along creates a sequence of the same variables used for indexing, importing an unzipped data, assigned to Table_Names
-  #mapply(function(aa,bb) assign(aa,import(bb,format='csv'),inherits = T),Table_Names,Unzipped_Data)
-  #~as.Date(.x) can also be writen "as.Date"
+  # usage note: mapply(function(aa,bb) assign(aa,import(bb,format='csv'),inherits = T),Table_Names,Unzipped_Data)
   save(list=c(Table_Names,'Table_Names'),file='data.R.rdata');
   message("data downloaded")
 } else{
@@ -94,9 +114,9 @@ admissions[,democolumns] %>% unique() %>% nrow()
 # count numbers of unique rows in democolumns
 
 
-
+#' # Some data exploration examples, no permanent changes made in this section
 sapply(admissions[,democolumns],lengthunique)
-# apply a function (lengthunique) to all democolumns in the admissions dataframe
+# apply a custom function (lengthunique) to all democolumns in the admissions dataframe
 
 sapply(admissions[,democolumns],function(xx) unique(xx) %>% length())
 # alternative code, which perform the same function as the one above
@@ -113,8 +133,8 @@ summarise(admissions[,democolumns]
 
 group_by(admissions,subject_id)%>% summarise(across(any_of(democolumns),lengthunique)) %>% head()
 
-#Start a new section
-#' Demographic Table
+# Start a new section
+#' # Demographic Table
 #'
 
 demographics<-group_by(admissions,subject_id) %>%
@@ -132,9 +152,10 @@ demographics$deathtime %>% class()
 demographics[is.infinite(demographics$deathtime),"deathtime"]=NA
 
 named_outputevents<-left_join(outputevents,d_items,by=c(itemid='itemid'))
-named_labevents<-left_join(labevents,d_labitems)
-named_chartevents<-left_join(chartevents,d_items)
-named_diagnoses<-left_join(diagnoses_icd,d_icd_diagnoses)
+named_labevents <- left_join(labevents,d_labitems)
+named_chartevents <- left_join(chartevents, d_items)
+named_diagnoses <- left_join(diagnoses_icd, d_icd_diagnoses)
+
 
 # A list of variable (labs/Glucose, A1c, hypoglycemia/diagnosis, death, icu stay, length of icu stay)
 # select(admissions,subject_id,hadm_id,admittime,dischtime)
@@ -143,7 +164,7 @@ named_diagnoses<-left_join(diagnoses_icd,d_icd_diagnoses)
 # created a list
 
 # create a scaffold of admission dates
-adm_Dates<-transmute(admissions,hadm_id=hadm_id,subject_id=subject_id,
+adm_Dates <- transmute(admissions,hadm_id=hadm_id,subject_id=subject_id,
                      los=ceiling(as.numeric(dischtime - admittime)) / 24,
                      date=map2(admittime,dischtime,function(xx,yy)
                        {seq(trunc(xx,units = "days"),yy,by="day")})) %>% unnest()
@@ -151,7 +172,7 @@ adm_Dates<-transmute(admissions,hadm_id=hadm_id,subject_id=subject_id,
 
 # icu stay dates
 
-icu_Dates = icustays %>% transmute(hadm_id, subject_id, stay_id,
+icu_Dates <- icustays %>% transmute(hadm_id, subject_id, stay_id,
                                    ICUlos=los,
                                    ICUlos_revised = ceiling(as.numeric(outtime - intime) / 1440),
                                    ICU_date = purrr::map2(intime,outtime,
@@ -160,12 +181,12 @@ icu_Dates = icustays %>% transmute(hadm_id, subject_id, stay_id,
   mutate(icu_date=as.Date(ICU_date)) %>%
   group_by(hadm_id,subject_id,ICU_date) %>%
 # summarise(ICUlos=paste(ICUlos,collapse = "|"),stay_id=paste(stay_id,collapse ="|"))
-summarise(ICUlos = list(ICUlos),stay_id = list(stay_id)) #"ERROR in n ()
+summarise(ICUlos = list(ICUlos),stay_id = list(stay_id))
 # now the columns ICUlos and stay_id are lists, not numbers such as NA
 
 htn_adm<-named_diagnoses %>% subset(str_detect(tolower(long_title),'hypertens')) %>% pull(hadm_id) %>% unique()
 
-hypoG_adm=MainData_icd<-c("E11649","E161","E162","E160","E15","E13141") %>% paste(.,collapse = "|") %>%
+hypoG_adm <- MainData_icd<-c("E11649","E161","E162","E160","E15","E13141") %>% paste(.,collapse = "|") %>%
   {subset(named_diagnoses,grepl(.,icd_code))} %>%
   pull(hadm_id) %>% unique()
 # The subset function is used to select rows from the named_diagnoses dataset
@@ -182,7 +203,7 @@ named_labevents %>% group_by(category,fluid,loinc_code,label) %>%
   summarize(n=n(),patients=lengthunique(subject_id)) %>%
   arrange(desc(n))
 
-pH_table=named_labevents %>% mutate(charttime=as.Date(charttime)) %>%
+pH_table <- named_labevents %>% mutate(charttime=as.Date(charttime)) %>%
   filter(itemid==50820) %>%
   group_by(subject_id,charttime) %>%
   summarise(pH=min(valuenum),pH_flag=any(flag=='abnormal')) %>%
@@ -203,7 +224,7 @@ analytic_event<-named_chartevents %>% mutate(charttime=as.Date(charttime)) %>%
 MainData<-MainData %>%
   left_join(pH_table, by=c('subject_id','date'='charttime')) %>%
   mutate(pH=coalesce(pH, 7.4)) %>%
-  left_join(analytic_event, by=c('subject_id','date'='charttime')) %>%
+  left_join(analytic_event, by = c('subject_id','date' = 'charttime')) %>%
   left_join(demographics)
 # adding missing value of pH, assign it to 7.4
 
@@ -258,15 +279,16 @@ sapply(.GlobalEnv, is.data.frame) %>% .[.] %>% names(.) %>%
 
 # SQL (BigQuery)
 
-if(upload_to_google){gar_cache_empty()
-gar_set_client("Service_Account_SQL.json")
-bqr_auth(email="topystone@gmail.com")
-lapply(Table_Names,function(xx){message(xx);bqr_upload_data("inspiring-tower-401719","Class_Test_Dataset",xx,get(xx))})
-# can use lapply or for loop
+if(upload_to_google && file.exists('Service_Account_SQL.json')){
+  gar_cache_empty()
+  # Service_Account_SQL.json is a file that's supposed to exist on your own
+  # local computer. If you ever need to download a new copy or make an OAuth
+  # credentials file for a different project, here are some instructions to
+  # help you: https://gargle.r-lib.org/articles/get-api-credentials.html
+  gar_set_client("Service_Account_SQL.json")
+  bqr_auth(email=authemail)
+  lapply(Table_Names,function(xx){message(xx);bqr_upload_data(projectid,datasetid,xx,get(xx))})
+  # can use lapply or for loop
 }
 
-export(icu_Dates,'icu_Dates.csv')
-
-#bqr_upload_data("inspiring-tower-401719","Class_Test_Dataset",Table_Names,get(Table_Names))}
-
-#bqr_upload_data("inspiring-tower-401719","Class_Test_Dataset",'icu_Dates', get('icu_Dates'[,1:3])
+#export(icu_Dates,'icu_Dates.csv')

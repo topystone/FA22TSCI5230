@@ -53,3 +53,4 @@ local.config.R
 *.xlsx
 data/
 *.json
+config_local.R
